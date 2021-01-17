@@ -1,3 +1,4 @@
+#include <ctime>
 #include <cxxopts.hpp>
 #include <stdexcept>
 #include <string>
@@ -7,17 +8,66 @@
 #include <fstream>
 
 using namespace std::literals::string_literals;
+static bool verbose_output = false;
+/**
+ * @brief Iterates over file and directory paths and returns a list of files that exists.
+ * @param path_arguments The user supplied list of files and direcorties to operate on.
+ */
+auto detect_file_presence(std::vector<std::string>& path_arguments) noexcept ->
+    std::vector<std::string>
+{
+    std::vector<std::string> output {};
+    output.reserve(path_arguments.size());
+    int present_files = 0;
+    for (std::string& x_path : path_arguments)
+    {
+        if (std::filesystem::exists(x_path))
+        {
+            ++present_files;
+            output.push_back(x_path);
+        }
+        else if (verbose_output)
+        {
+            std::cout << "File or directory does not appear to exist in filesystem: "
+                      << x_path
+                      << "\n";
+        }
+    }
+    int rejected_files = (path_arguments.size()-present_files);
+    if (rejected_files)
+    {
+        std::cout << "Rejected "
+                  << rejected_files
+                  << " arguments that were not found in the filesystem \n";
+    }
+    return output;
+}
 /**
  *  @brief  Records a new entry to the database.
  *  @param  open_database  An open database file.
  *  @param  database_new_entry The entry to record to the database.
  */
-bool database_add_record(std::fstream& open_database, std::string database_new_entry)
+bool database_add_records(std::fstream& open_database,
+                          std::vector<std::string> database_new_entries) noexcept
 {
-    open_database << database_new_entry << std::endl;
+    int successful_entries = 0;
+    for (std::string& x_entry : database_new_entries)
+    {
+        open_database << x_entry << std::endl;
+        ++successful_entries;
+    }
+    if (successful_entries)
+    {
+        std::cout << "Successfully recorded "
+                  << successful_entries
+                  << " entries \n";
+    }
+    else
+    {
+        std::cout << "No entries were recorded \n";
+    }
     return true;
 }
-
 int main(int argc, char** argv) try
 {
     std::fstream database;
@@ -59,14 +109,17 @@ int main(int argc, char** argv) try
         throw std::runtime_error("could not open database file");
     }
     // argument handling
-    cxxopts::Options arguments("Blink(placeholder name)", "A program to help you record files you want to save");
+    cxxopts::Options arguments("Blink(placeholder name)",
+                               "A program to help you record files you want to save");
     arguments.add_options()
+        ("file", "A list of arguments unspecified by an leading argument, this "
+         "assumes a list of files, the command should support globbing",
+         cxxopts::value<std::vector<std::string>>())
         ("h,help", "Print this help page")
-        ("r,record", "Record an entry in the database with an optional note",
-         cxxopts::value<std::string>())
+        ("r,record", "Record an entry in the database with an optional note")
         ("i,ignore",
-         "Ignore an entry in the database, essentially removing it permanantly",
-         cxxopts::value<std::string>());
+         "Ignore an entry in the database, essentially removing it permanantly");
+    arguments.parse_positional({"file"});
     auto options = arguments.parse(argc, argv);
     if (options.count("help"))
     {
@@ -74,12 +127,16 @@ int main(int argc, char** argv) try
     }
     if (options.count("record"))
     {
-        std::string new_entry = options["record"].as<std::string>();
-        database_add_record(database, new_entry);
+        std::vector<std::string> options_data_entries =
+            options["file"].as<std::vector<std::string>>();
+        std::vector<std::string> existing_entries =
+            detect_file_presence(options_data_entries);
+        database_add_records(database, existing_entries);
     }
     if (options.count("ignore"))
     {
     }
+    std::cout.flush();
     database.flush();
     database.close();
     return 0;
