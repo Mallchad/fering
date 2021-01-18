@@ -43,7 +43,7 @@ auto detect_file_presence(std::vector<std::string>& path_arguments) noexcept ->
         if (std::filesystem::exists(x_path))
         {
             ++present_files;
-            output.push_back(x_path);
+            output.push_back(std::filesystem::canonical(x_path));
         }
         else if (verbose_output)
         {
