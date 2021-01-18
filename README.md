@@ -23,7 +23,7 @@ For now.
 # Building
 Requirements
 - cmake
-- a working C++14 compliant compiler on the path for cmake to find
+- a working C++17 compliant compiler on the path for cmake to find
 - a build system on the path like make or ninja
 Create a build directory like `build` and change the working directory to the build dir.
 Then run cmake whilst specifying the project root directory.
