@@ -112,6 +112,7 @@ bool database_add_records(std::fstream& open_database,
 }
 int main(int argc, char** argv) try
 {
+    // Variables
     std::fstream database;
     std::string blink_primary_database_dir = "";
     std::string blink_primary_database_filename = "record";
@@ -119,7 +120,7 @@ int main(int argc, char** argv) try
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     std::cerr << "This program is not ready for windows yet";
 #elif defined(linux)
-// generate default directory
+    // generate default directory
     blink_primary_database_dir = std::getenv("HOME");
     if (blink_primary_database_dir.length())
     {
@@ -178,11 +179,13 @@ int main(int argc, char** argv) try
     if (options.count("ignore"))
     {
     }
+    // Cleanup
     std::cout.flush();
     database.flush();
     database.close();
     return 0;
 }
+// Error Handling
 catch (std::exception& irrecoverable_error)
 {
     std::cout << irrecoverable_error.what() << std::endl;
