@@ -1,0 +1,32 @@
+#+Title: The Plan
+* Overview
+* Priority
+** TODO [#A] Update project to use the new name of biddy
+** TODO [#A] Refactor
+** TODO [#B] Create a path and tracked file based "package management"
+The motivation behind this is the ability to selectively pull and
+update files.
+Any complexity at all is a Resistance to getting started with this
+system, so it should prefer simple text files and json formats to get
+the job done.
+
+As a bonus the user could be offered a basic Lua API to extent a file
+however they see fit, and run custom scripts.
+Although bash or python make sense for this kind of thing, none can be
+assumed to be present on the users system, and given the json like
+object structure Lua has an the teeny tiny install, it makes a good
+fit.
+
+Another bonus would be generating a skeleton "package" based on some
+file paths and folders. This would be useful for setting up system
+agnostic files, where biddy can guess where it should be.
+
+* Backburner
+** TODO Write custom filesystem functions to make sure biddy logs its own changes
+too.
+It would be horribly ironic if this were not the case.
+** TODO Create a timer and file hook to auto-manage files on any system
+The motivation for this is a this tool won't assume you have sysadmin
+privileges or ability to access even local contrams and fanotify for
+example.
+So the project should be able to do it by itself, with optional cron support.
