@@ -22,6 +22,19 @@ file paths and folders. This would be useful for setting up system
 agnostic files, where biddy can guess where it should be.
 
 * Backburner
+** TODO Create a method of quickly operating on files in "input" directories
+This is intended to be an elegant solution to quickly performing
+maintenance on the system instead of painstakingly running commands on
+individual or even globbed files periodically.
+
+For example you could be presented with a picture, and asked, would
+you like to s(save it), t(trash it), o(optimize the image as a png),.
+
+Or, you could specify something like a kind of file "type", where one
+may .bmp file could be instructed to be optimized and moved to a photo
+folder, and another could be lossy compressed and moved to a discard
+folder with 1 keypress.
+
 ** TODO Write custom filesystem functions to make sure biddy logs its own changes
 too.
 It would be horribly ironic if this were not the case.
