@@ -49,6 +49,7 @@
 #define BOLDWHITE   "\033[1m\033[37m"      /* Bold White */
 #endif
 using namespace std::literals::string_literals;
+using std::string;
 
 static bool verbose_output = false;
 /**
@@ -85,17 +86,17 @@ auto detect_file_presence(std::vector<std::string>& path_arguments) noexcept ->
     return output;
 }
 /**
- *  @brief  Records a new entry to the database.
- *  @param  open_database  An open database file.
- *  @param  database_new_entry The entry to record to the database.
+ *  @brief  Records a new entry to the persistent_database.
+ *  @param  open_persistent_database  An open persistent_database file.
+ *  @param  persistent_database_new_entry The entry to record to the persistent_database.
  */
-bool database_add_records(std::fstream& open_database,
-                          std::vector<std::string> database_new_entries) noexcept
+bool persistent_database_add_records(std::fstream& open_persistent_database,
+                          std::vector<std::string> persistent_database_new_entries) noexcept
 {
     int successful_entries = 0;
-    for (std::string& x_entry : database_new_entries)
+    for (std::string& x_entry : persistent_database_new_entries)
     {
-        open_database << x_entry << std::endl;
+        open_persistent_database << x_entry << std::endl;
         ++successful_entries;
     }
     if (successful_entries)
@@ -113,43 +114,43 @@ bool database_add_records(std::fstream& open_database,
 int main(int argc, char** argv) try
 {
     // Variables
-    std::fstream database;
-    std::string blink_primary_database_dir = "";
-    std::string blink_primary_database_filename = "record";
-    bool blink_archive_database_exists = false;
+    std::fstream persistent_database;
+    std::string blink_primary_persistent_database_dir = "";
+    std::string blink_primary_persistent_database_filename = "record";
+    bool blink_archive_persistent_database_exists = false;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     std::cerr << "This program is not ready for windows yet";
 #elif defined(linux)
     // generate default directory
-    blink_primary_database_dir = std::getenv("HOME");
-    if (blink_primary_database_dir.length())
+    blink_primary_persistent_database_dir = std::getenv("HOME");
+    if (blink_primary_persistent_database_dir.length())
     {
-        blink_primary_database_dir += "/.local/share/blink"s;
-        bool database_dir_exists = std::filesystem::exists(blink_primary_database_dir);
-        if (!database_dir_exists)
+        blink_primary_persistent_database_dir += "/.local/share/blink"s;
+        bool persistent_database_dir_exists = std::filesystem::exists(blink_primary_persistent_database_dir);
+        if (!persistent_database_dir_exists)
         {
-            std::filesystem::create_directory(blink_primary_database_dir);
-            std::filesystem::create_directory(blink_primary_database_dir +
+            std::filesystem::create_directory(blink_primary_persistent_database_dir);
+            std::filesystem::create_directory(blink_primary_persistent_database_dir +
                                               "/archive");
         }
-        database_dir_exists = std::filesystem::exists(blink_primary_database_dir);
+        persistent_database_dir_exists = std::filesystem::exists(blink_primary_persistent_database_dir);
         // create file
-        if (!std::filesystem::exists(blink_primary_database_dir+"/"+
-                                     blink_primary_database_filename))
+        if (!std::filesystem::exists(blink_primary_persistent_database_dir+"/"+
+                                     blink_primary_persistent_database_filename))
         {
-            database.open(blink_primary_database_dir+"/"+blink_primary_database_filename,
+            persistent_database.open(blink_primary_persistent_database_dir+"/"+blink_primary_persistent_database_filename,
                       std::fstream::out);
-            database.flush();
-            database.close();
+            persistent_database.flush();
+            persistent_database.close();
         }
     }
 
 #endif
-    database.open(blink_primary_database_dir+"/"+blink_primary_database_filename,
-                  std::fstream::ate|std::fstream::out|std::fstream::in);
-    if (!database.is_open())
+    persistent_database.open(blink_primary_persistent_database_dir+"/"+blink_primary_persistent_database_filename,
+                             std::fstream::ate|std::fstream::out|std::fstream::in);
+    if (!persistent_database.is_open())
     {
-        throw std::runtime_error("could not open database file");
+        throw std::runtime_error("could not open persistent_database file");
     }
     // argument handling
     cxxopts::Options arguments("Blink(placeholder name)",
@@ -159,9 +160,9 @@ int main(int argc, char** argv) try
          "assumes a list of files, the command should support globbing",
          cxxopts::value<std::vector<std::string>>())
         ("h,help", "Print this help page")
-        ("r,record", "Record an entry in the database with an optional note")
+        ("r,record", "Record an entry in the persistent_database with an optional note")
         ("i,ignore",
-         "Ignore an entry in the database, essentially removing it permanantly");
+         "Ignore an entry in the persistent_database, essentially removing it permanantly");
     arguments.parse_positional({"file"});
     auto options = arguments.parse(argc, argv);
     if (options.count("help"))
@@ -174,15 +175,15 @@ int main(int argc, char** argv) try
             options["file"].as<std::vector<std::string>>();
         std::vector<std::string> existing_entries =
             detect_file_presence(options_data_entries);
-        database_add_records(database, existing_entries);
+        persistent_database_add_records(persistent_database, existing_entries);
     }
     if (options.count("ignore"))
     {
     }
     // Cleanup
     std::cout.flush();
-    database.flush();
-    database.close();
+    persistent_database.flush();
+    persistent_database.close();
     return 0;
 }
 // Error Handling

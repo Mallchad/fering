@@ -15,8 +15,9 @@ namespace outcome
 }
 class debug
 {
+    static std::string logfile_default_path;
     static std::fstream logfile;
-    static std::fstream logfile_default_path;
 public:
+    static outcome_code initialize();
     static outcome_code log(std::string message, bool verbose = true);
 };

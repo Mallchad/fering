@@ -32,6 +32,6 @@ private:
     std::unordered_multiset<string> log {};
 public:
     database();
-    outcome_code track_new_path(filesystem::path new_path, 
+    outcome_code track_new_path(path new_path,
                                 tracking_category path_category);
 };
