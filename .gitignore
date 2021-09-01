@@ -1,8 +1,13 @@
-# Ignore Everything
+# Ignore Everything in Root
 */
 
 # Whitelist
 !include/
 !src/
+!tests/
 !.gitignore
-!README.*
+!*.lua
+!*.md
+!CMakeLists.txt
+
+# Blacklist

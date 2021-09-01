@@ -1,6 +1,4 @@
-# Blink
-The name is placeholder...
-Suggestions are welcome...
+# Fering
 # Forenote
 This software relies on the neat `cxxopts` program written by jarro2783.
 cxxopts is a header only file that provides clean and intuitive command 
@@ -9,8 +7,7 @@ See below if you want to see more for yourself.
 https://github.com/jarro2783/cxxopts
 
 # Synopsis
-Blink is a project which aims to aid users with managing their system, system maintenance 
-can be hard to achieve well on its own, doing it without tools is even worse.
+Fering is a general-purpose project which aims to aid users with managing their system, system maintenance can be hard to achieve well on its own, doing it without tools is even worse.
 This project aims to help alleviate this by providing simple yet effective tools to track 
 files, directories, and in the future operate on such tracked items.
 
