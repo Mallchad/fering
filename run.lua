@@ -41,10 +41,29 @@ local function remove_directories(...)
       end
    end
 end
+--- Find the last occurance of substring and return the 2 indicies of the position
+function string.find_last(str, substr, search_from)
+   search_from = search_from or 1
+   local match_start, match_end = nil, nil
+   local tmp_start, tmp_end = nil, nil
+   repeat
+      tmp_start, tmp_end = string.find(str, substr, search_from)
+      if tmp_end ~= nil then
+         search_from = tmp_end+1
+         match_start = tmp_start
+         match_end = tmp_end
+      end
+   until tmp_start == nil
+   return match_start, match_end
+end
 
 -- Variables
 -- you will like the global variables and you will OWN them.
--- local arg_relative_directory = arg[0].subt4r
+
+--- current working directory, relative to the helper script
+-- This is the only realistic way of getting some kind of inkling of the
+-- working directy without pulling in external dependencies or scripts
+local arg_relative_dir = arg[0]
 local arg_command = arg[0]
 local arg_parsed_verb = arg[1]
 local arg_parsed_positional = {}
@@ -72,6 +91,7 @@ local arg_positionals =
       testing      = "Build Type: with optimizations but also with development tools",
       release      = "Build Type: a project with optimizations on and no development tools"
    }
+local arg_positional_values
 -- All used local-only project directories, relative to project root
 local dirs =
    {
@@ -201,6 +221,17 @@ local function help()
 end
 --- Parses the arguments
 local function parse_arguments()
+   -- Command non-argument '0'
+   local _, path_end = string.find_last(arg_relative_dir, "/")
+   if path_end == nil then
+      _, path_end = string.find_last(arg_relative_dir, "\\")
+   end
+   if path_end ~= nil then
+      arg_command = string.sub(arg_relative_dir, path_end+1)
+      arg_relative_dir = string.sub(arg_relative_dir, 1, path_end)
+   elseif path_end == nil then
+   end
+
    -- Verb Arguments
    if arg_parsed_verb ~= nil then
       arg_verb_passed = true
