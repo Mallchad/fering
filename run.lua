@@ -180,8 +180,8 @@ local function help()
    local generated_help_string = help_string.main
    -- Padded to tab stops '\n'
    for k_name, x_help_string in pairs (arg_verbs) do
-      local alignment_padding <const> = help_target_alignment_column - #k_name
-      local alignment_padding_string <const> = string.rep(" ", alignment_padding)
+      local alignment_padding = help_target_alignment_column - #k_name
+      local alignment_padding_string = string.rep(" ", alignment_padding)
       generated_help_string =
          generated_help_string.."\n"..
          k_name..alignment_padding_string..
@@ -190,8 +190,8 @@ local function help()
    -- Section break '\f'
    generated_help_string = generated_help_string.."\f"
    for k_name, x_help_string in pairs (arg_positionals) do
-      local alignment_padding <const> = help_target_alignment_column - #k_name
-      local alignment_padding_string <const> = string.rep(" ", alignment_padding)
+      local alignment_padding = help_target_alignment_column - #k_name
+      local alignment_padding_string = string.rep(" ", alignment_padding)
       generated_help_string =
          generated_help_string..
          k_name..alignment_padding_string..
@@ -213,7 +213,7 @@ local function parse_arguments()
 
    -- Positional Arguments
    for i_arg = 2, #arg do
-      local x_arg <const> = arg[i_arg]
+      local x_arg = arg[i_arg]
       local hyphen_stripped_arg = ""
       -- NOTE: the hyphen being stripped is implied, but the stripped values are irrelevant
       if #x_arg > 2 then
