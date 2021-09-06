@@ -21,7 +21,10 @@ target_compile_definitions(fering PUBLIC FERING_DEBUG=${FERING_DEBUG})
 add_library(cxxopts STATIC include)
 
 # Variables
-message(${CMAKE_BINARY_DIR})
+set(FERING_MINIMUM_CXX_STANDARD ${CMAKE_CXX_STANDARD}
+  CACHE STRING "The minimum C++ Standard to use")
+set(FERING_BUILD_TYPE ${CMAKE_BUILD_TYPE}
+  CACHE STRING "The type of build the project wants to make")
 set(FERING_BUILD_DIR ${CMAKE_BINARY_DIR}
   CACHE STRING "A custom path for the build directory")
 set(FERING_BINARY_DIR ${FERING_BUILD_DIR}/bin
@@ -32,8 +35,14 @@ set(FERING_ARTIFACT_DIR ${FERING_BUILD_DIR}/bin
   CACHE STRING "A custom path for the build artifact output directory")
 set(FERING_DEBUG_DIR ${FERING_BUILD_DIR}/debug
   CACHE STRING "A custom path for the build artifact output directory")
-set(FERING_DEBUG true
-  CACHE STRING "")
+set(FERING_ENABLE_DEBUG true
+  CACHE STRING "Enables debugging specific options")
+set(FERING_USE_CCACHE true
+  CACHE STRING "Whether to prioritize ccache usage if possible")
+set(FERING_USE_CLANG true
+  CACHE STRING "Whether to prioitize clang usage if possible")
+# Standard Variables
+
 # Attempt to parallelize build
 include(ProcessorCount)
 ProcessorCount(CPU_CORES)
@@ -43,17 +52,17 @@ endif(NOT CPU_CORES EQUAL 0)
 
 # Enable Compiler Cache if possible
 find_program(CCACHE_FOUND ccache)
-if(CCACHE_FOUND)
+if(CCACHE_FOUND AND ${FERING_USE_CCACHE})
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
   message("ccache : Detected program launcher will be used")
-endif(CCACHE_FOUND)
+endif()
 
 # Use clang compiler if possible
 find_program(CLANG_FOUND clang)
-if(CLANG_FOUND)
+if(CLANG_FOUND AND ${FERING_USE_CLANG})
   set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
   message("clang : Detected compiler will be used")
-endif(CLANG_FOUND)
+endif()
 
 # Target Properties
 set_target_properties(fering PROPERTIES
@@ -66,6 +75,8 @@ set_target_properties(fering PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${FERING_ARTIFACT_DIR}$<0:>
   COMPILE_PDB_OUTPUT_DIRECTORY ${FERING_DEBUG_DIR}$<0:>)
 
-set_target_properties(cxxopts PROPERTIES LINKER_LANGUAGE CXX
+set_target_properties(cxxopts PROPERTIES
+  LINKER_LANGUAGE CXX           # Can't resolve .hpp file language, so be explicit
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin$<0:>
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin$<0:>)
+
