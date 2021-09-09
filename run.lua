@@ -11,8 +11,14 @@
 
 local log_verbose = true
 local log_silent = false
+-- Record log messages to disk, does nothing yet
+local log_record
+
+local debug_enabled = false
 -- Temporarily ignores some debug facilities that should error out
+-- 'DEBUG_IGNORE' only needs to be set to be considered true
 local debug_ignore = os.getenv("DEBUG_IGNORE") or nil
+
 -- This section is supposed to be easily edited, for quick
 -- extensibility of documentation and passable variables
 
