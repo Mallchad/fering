@@ -1,17 +1,196 @@
 #!/usr/bin/env lua
--- GPL3 License
--- Copyright (c) 2021 Mallchad
--- This source provides the right to be freely used in any form, so long as modified
--- variations remain available publically, or open request.
--- Modified versions must be marked as such.
--- The source comes with no warranty of any kind.
+--[[
+   GPL3 License
+   Copyright (c) 2021 Mallchad
+   This source provides the right to be freely used in any form,
+   so long as modified variations remain available publically, or open request.
+   Modified versions must be marked as such.
+   The source comes with no warranty of any kind.
+]]--
+-- Variables
 
+local log_verbose = true
+local log_silent = false
+-- Temporarily ignores some debug facilities that should error out
+local debug_ignore = os.getenv("DEBUG_IGNORE") or nil
+-- This section is supposed to be easily edited, for quick
+-- extensibility of documentation and passable variables
+
+--- The keys describe action arguments which can be executed.
+-- Each verb has a help string as its value
+local arg_verbs =
+   {
+      build = "regenerate the build system and compile the project",
+      clean = "remove local, non-critical untracked files where possible",
+      configure  = "setup desirable local-only files and build enviornment",
+      run   = "run the an executable from the project",
+      help  = "display help string"
+   }
+--- Unordered arguments
+-- The key is the argument name, the value is a help string
+local arg_flags =
+   {
+      clean = "Run the a clean target before building",
+      verbose = "Enable verbose message output",
+   }
+--- Unordered arguments that can store a value
+-- The key is the argument name, the value is a help string
+-- Optionally, the value can be a table, with a list of mutually exclusive,
+-- pre-determined values, each with their own help strings
+-- Optionally, the first unnamed ([1]) string in the aforementioned table
+-- can be a help string associated with the variable
+local arg_variables =
+   {
+      build_type =
+         {
+            [[A string that is a passed to cmake as FERING_BUILD_TYPE,
+as well as '--config' cmake build option variable]],
+            debug       = "Build Type: Type with debugging symbols",
+            development = "Build Type: with no special settings or optimizations",
+            testing     = "Build Type: with optimizations but also with development tools",
+            release     = "Build Type: a project with optimizations on and no development tools"
+         }
+   }
+-- End of argument/documentation options
+
+--- current working directory, relative to the helper script
+-- This is the only realistic way of getting some kind of inkling of the
+-- project root relative working directy without pulling in external
+-- dependencies or scripts
+local arg_relative_root = arg[0]
+local arg_command = arg[0]
+local arg_parsed_verb = arg[1]
+local arg_parsed = {}
+local arg_verb_passed = false
+local arg_help_passed = false
+
+local dirs =
+   {
+      root = ""
+   }
+--- All used local-only project directories, relative to project root
+-- This is supposed to be temporary directories/files that are ok to delete
+local local_dirs =
+   {
+      build = "build",
+      build_binaries = "build/bin",
+      build_artifacts = "artifacts",
+      build_debug = "build/debug",
+   }
+local help_string =
+   {
+      main = [[
+usage: run.lua <verb> <args>
+
+This is a helper tool to aid with working with the project.
+
+Verbs:
+]],
+verbs_documentation = "",
+build = [[
+
+The types valid for this project are:
+debug - Build with debugging symbols
+development - Build with no special settings or optimizations
+testing - Build with optimizations but also with development tools
+release - Build a project with optimizations on and no development tools
+
+      ]],
+      clean = [[Builds the project
+
+type 'build.lua clean' to clean the files
+before building (currently does nothing) ]]
+   }
+-- '-B' is build directory
+local build_configure_command = "cmake -B build"
+local build_binary_command = "cmake --build "..local_dirs.build
+local build_clean_command = "cmake --build "..local_dirs.build.." --target clean"
+local build_primary_executable_name = "fering"
+local build_primary_executable_path = local_dirs.build_binaries.."/"..build_primary_executable_name
+local cmake_variables =
+   {
+      CMAKE_BUILD_TYPE = nil,
+      FERING_MINIMUM_CXX_STANDARD = 17,
+      FERING_BUILD_DIR = local_dirs.build,
+      FERING_BINARY_DIR = local_dirs.build_binaries,
+      FERING_LIBRARY_DIR = local_dirs.build_libraries,
+      FERING_ARTIFACT_DIR = local_dirs.build_artifacts,
+      FERING_DEBUG_DIR = local_dirs.build_debug,
+      FERING_ENABLE_DEBUG = true,
+      FERING_USE_CCACHE = true,
+      FERING_USE_CLANG = true,
+      FERING_TEST_VAR = "Hello, I'm an irrational value!"
+   }
+
+local help_elastic_padding = 20
+local help_option_padding = 5
+local help_option_elastic_padding = 20
 -- Helper functions
 
---- Wrap a string in quotes
+--- Wrap a string in speech marks
 -- This is primarily a helper for Windows path compatibility
 local function quote(str)
    return ("\""..str.."\"")
+end
+-- Wrap string in quote marks
+-- The name means 'Paraphrasing Quote'
+local function pquote(str)
+   return ("'"..str.."'")
+end
+--- Write a message to stdout, adhering to 'log_silent'
+local function log(...)
+   local messages = {...}
+   local message_string = ""
+   for _, x_message in pairs(messages) do
+      message_string = message_string..tostring(x_message)
+   end
+   if log_silent == false then
+      print(message_string)
+   end
+end
+--- Write to stdout, making a variable the 'subject' of the message
+-- All arguments are automatically passed through 'tostring'.
+-- The value argument is automatically quoted.
+-- The varaiadic arugments are space seperated
+local function vallog(value, ...)
+   local messages = {...}
+   local message_string = ""
+   local value_string = pquote(tostring(value))
+   for _, x_message in pairs(messages) do
+      message_string = message_string..tostring(x_message).." "
+   end
+   if log_silent == false then
+      print(value_string.." : "..message_string)
+   end
+end
+--- Write a message to stdout, but only when 'log_verbose' is non-nl
+-- The name or this function is intentionally shorter than would typically
+-- be acceptable.
+-- Such debug/programmer oriented functions are important, and something
+-- trivial like time to type, or a long name cluttering code should not
+-- be a factor in deciding not to them, it should be used often.
+local function dlog(...)
+   if log_verbose then
+      print(...)
+   end
+   error("finish this.")
+end
+--- Logging facilities that will error if 'debug_ignore' is false
+-- This value is considered true if enviornment variable 'DEBUG_IGNORE'
+-- has been set
+local function TLOG(...)
+   assert(debug_ignore, "Debugging is disabled, you should delete this temporary line")
+   print(...)
+end
+--- An reminder function that will error is 'debug_ignore' is false
+-- This is just a helper function for writing code
+   local messages = {...}
+   local message_string = ""
+   local value_string = pquote(tostring(value))
+   for _, x_message in pairs(messages) do
+      message_string = message_string..tostring(x_message).." "
+   end
+   assert(debug_ignore, "TODO: "..message_string)
 end
 --- Check if a file or directory exists in this path
 local function file_exists(file)
@@ -37,7 +216,7 @@ local function make_directories(...)
       new_directories = new_directories[1]
    end
 
-   local verbose_output = debug_verbose and not debug_silent
+   local verbose_output = log_verbose and not log_silent
    verbose_output = true
    for _, new_dir in pairs(new_directories) do
       if dir_exists(new_dir)then
@@ -93,115 +272,15 @@ function string.find_last(str, substr, search_from)
    until tmp_start == nil
    return match_start, match_end
 end
-
--- Variables
--- you will like the global variables and you will OWN them.
-
-local debug_verbose = true
-local debug_silent = false
-
---- current working directory, relative to the helper script
--- This is the only realistic way of getting some kind of inkling of the
--- project root relative working directy without pulling in external
--- dependencies or scripts
-local arg_relative_root = arg[0]
-local arg_command = arg[0]
-local arg_parsed_verb = arg[1]
-local arg_parsed_positional = {}
-local arg_verb_passed = false
-local arg_help_passed = false
-
---- The keys describe action arguments which can be executed.
--- Each verb has a help string as its value
-local arg_verbs =
-   {
-      build = [[regenerate the build system and compile the project
-        The first argument is the a Build Type
-        Example: 'run.lua build development']],
-        clean = "remove local, non-critical untracked files where possible",
-        configure  = "setup desirable local-only files and build enviornment",
-        run   = "run the an executable from the project",
-        help  = "display help string"
-   }
---- Unordered arguments
--- The key is the argument name, the value is a help string
-local arg_positionals =
-   {
-      clean = "Run the a clean target before building",
-   }
---- Unordered arguments that can store a value
--- The key is the argument name, the value is a help string
--- Optionally, the value can be a table, with a list of mutually exclusive,
--- pre-determined values, each with their own help strings
-local arg_positional_values =
-   {
-      build_type =
-         {
-         debug       = "Build Type: Type with debugging symbols",
-         development = "Build Type: with no special settings or optimizations",
-         testing     = "Build Type: with optimizations but also with development tools",
-         release     = "Build Type: a project with optimizations on and no development tools"
-         }
-   }
-local dirs =
-   {
-      root = ""
-   }
---- All used local-only project directories, relative to project root
--- This is supposed to be temporary directories/files that are ok to delete
-local local_dirs =
-   {
-      build = "build",
-      build_binaries = "build/bin",
-      build_artifacts = "artifacts",
-      build_debug = "build/debug",
-   }
-local help_string =
-   {
-      main = [[
-usage: run.lua <verb> <args>
-
-This is a helper tool to aid with working with the project.
-
-Verbs:]],
-verbs_documentation = "",
-build = [[
-
-The types valid for this project are:
-debug - Build with debugging symbols
-development - Build with no special settings or optimizations
-testing - Build with optimizations but also with development tools
-release - Build a project with optimizations on and no development tools
-
-      ]],
-      clean = [[Builds the project
-
-type 'build.lua clean' to clean the files
-before building (currently does nothing) ]]
-   }
--- '-B' is build directory
-local build_configure_command = "cmake -B build"
-local build_binary_command = "cmake --build "..local_dirs.build
-local build_clean_command = "cmake --build "..local_dirs.build.." --target clean"
-local build_primary_executable_name = "fering"
-local build_primary_executable_path = local_dirs.build_binaries.."/"..build_primary_executable_name
-local cmake_variables =
-   {
-      CMAKE_BUILD_TYPE = nil,
-      FERING_MINIMUM_CXX_STANDARD = 17,
-      FERING_BUILD_DIR = local_dirs.build,
-      FERING_BINARY_DIR = local_dirs.build_binaries,
-      FERING_LIBRARY_DIR = local_dirs.build_libraries,
-      FERING_ARTIFACT_DIR = local_dirs.build_artifacts,
-      FERING_DEBUG_DIR = local_dirs.build_debug,
-      FERING_ENABLE_DEBUG = true,
-      FERING_USE_CCACHE = true,
-      FERING_USE_CLANG = true,
-      FERING_TEST_VAR = "Hello, I'm an irrational value!"
-   }
-
-local help_target_alignment_column = 20
-
+--- Does a shallow copy of the contents of the table, optonally to a target
+-- Will return the new table
+function table:copy(old, target)
+   local new = target or {}
+   for key, x_old_value in pairs(old) do
+      new[key] = x_old_value
+   end
+   return setmetatable(new, getmetatable(old))
+end
 -- Operational Functions
 
 -- Do any post-build setup required
@@ -213,6 +292,7 @@ local function configure()
    -- Generate helpful or neccecary local files
    os.execute("cmake -S "..local_dirs.root.." -B "..local_dirs.build.. " -DCMAKE_EXPORT_COMPILE_COMMANDS=1")
    copy_file(local_dirs.build.."/compilation_commands.json", local_dirs.root.."/compile_commands.json")
+   print("")                  -- Just command line padding
 end
 local function clean(clean_method)
    print("[Clean Start]")
@@ -220,12 +300,17 @@ local function clean(clean_method)
       remove_directories(x_directory)
    end
    print("[Clean Done]")
-end
-local function build(build_type, clean_build)
-   build_type = build_type or "development"
-   clean_build = clean_build or false
+   print("")                  -- Just command line padding
 
+end
+local function build()
+   TODO("Create passthrough mechanism for cmake variables")
+   local build_type = arg_parsed.build_type or "development"
+   local clean_build = arg_parsed.clean or false
+   vallog(build_type, "build type")
    local cmake_variables_string = ""
+   cmake_variables.FERING_BUILD_TYPE = build_type
+
    for x_var_name, x_var_value in pairs(cmake_variables) do
       if type(x_var_value) == "string" then
          -- String values should be quoted
@@ -240,7 +325,7 @@ local function build(build_type, clean_build)
    local build_binary_string = build_binary_command.." --config="..build_type
 
    print("[Pre-Build]")
-   if clean_build or arg_parsed_positional[1] == "clean" then
+   if clean_build or arg_parsed[1] == "clean" then
       print("Cleaning build area")
       os.execute(build_clean_command)
    end
@@ -249,6 +334,7 @@ local function build(build_type, clean_build)
    os.execute(build_binary_command)
    print("[Finishing Up]")
    print("[Done]")
+   print("")                  -- Just command line padding
 
 end
 local function run(build_first)
@@ -256,41 +342,95 @@ local function run(build_first)
    local executable_string = build_primary_executable_path
 
    -- Append any extra arguments
-   for _, x_arg in ipairs(arg_parsed_positional) do
+   for _, x_arg in ipairs(arg_parsed) do
       executable_string = executable_string.." "..x_arg
    end
    os.execute(executable_string)
-   print(executable_string)
+   print("")                  -- Just command line padding
 end
 -- Display the help text
 local function help()
    local generated_help_string = help_string.main
    local tmp_arg_name = ""
 
-   -- Padded to tab stops '\n'
+   -- Everything is padded to tab stops '\n'
+   -- Verbs
    for k_name, x_help_string in pairs (arg_verbs) do
-      local alignment_padding = help_target_alignment_column - #k_name
-      local alignment_padding_string = string.rep(" ", alignment_padding)
+      local elastic_padding = help_elastic_padding - #k_name
+      local elastic_padding_string = string.rep(" ", elastic_padding)
+      local padding_string = string.rep(" ", help_elastic_padding)
+      local tmp_help_string = ""
       tmp_arg_name = string.gsub(k_name, "_", "-") -- use more CLI friendly hyphen
+      -- Align subsequent newlines
+      tmp_help_string =
+         string.gsub(x_help_string, "\n", "\n"..padding_string)
+
       generated_help_string =
-         generated_help_string.."\n"..
-         tmp_arg_name..alignment_padding_string..
-         x_help_string.."\n"
+         generated_help_string..
+         tmp_arg_name..elastic_padding_string..
+         tmp_help_string.."\n"
    end
-   generated_help_string = generated_help_string.."\n"
-   for k_name, x_help_string in pairs (arg_positionals) do
-      local alignment_padding = help_target_alignment_column - #k_name
+   generated_help_string = generated_help_string..
+      "\n"..
+      "Arguments:".."\n"
+
+   -- Flags
+   for k_name, x_help_string in pairs (arg_flags) do
+      local alignment_padding = help_elastic_padding - #k_name
       local alignment_padding_string = string.rep(" ", alignment_padding)
-      tmp_arg_name = string.gsub(k_name, "_", "-") -- use more
+      tmp_arg_name = string.gsub(k_name, "_", "-")
+      tmp_arg_name = "--"..tmp_arg_name
+
       generated_help_string =
          generated_help_string..
          tmp_arg_name..alignment_padding_string..
          x_help_string.."\n"
    end
+
+   -- Variables
+   for k_name, x_help_string in pairs (arg_variables) do
+      local elastic_padding = help_elastic_padding - #k_name
+      local elastic_padding_string = string.rep(" ", elastic_padding)
+      local option_padding_string = string.rep(" ", help_option_padding)
+      local alignment_padding_string = string.rep(" ", help_elastic_padding)
+      local option_elastic_padding = 0
+      local option_elastic_padding_string = 0
+      local option_help_string = (x_help_string[1] or "<undocumented>")
+
+      tmp_arg_name = string.gsub(k_name, "_", "-") -- use more
+      tmp_arg_name = "--"..tmp_arg_name
+      -- Align subsequent newlines
+      option_help_string = string.gsub(option_help_string,
+                                       "\n",
+                                       "\n  "..alignment_padding_string)
+
+      generated_help_string =
+         generated_help_string..
+         tmp_arg_name..elastic_padding_string..
+         option_help_string.."\n"..
+         option_padding_string..
+         "Expected Options: \n"
+      for k_option, x_option_help_string in pairs(arg_variables[k_name]) do
+         if type(k_option) == "string" then
+            option_elastic_padding = help_option_elastic_padding - #k_option
+            option_elastic_padding_string = string.rep(" ", option_elastic_padding)
+
+            generated_help_string =
+               generated_help_string..
+               option_padding_string..
+               k_option..
+               option_elastic_padding_string..
+               x_option_help_string.."\n"
+         end
+      end
+   end
+
    print(generated_help_string)
+   print("")                  -- Just command line padding
 end
 --- Parses the arguments
 local function parse_arguments()
+   local parsing_failiure = false
    -- Command non-argument '0'
    local _, path_end = string.find_last(arg_relative_root, "/")
    if path_end == nil then
@@ -315,31 +455,55 @@ local function parse_arguments()
       arg_help_passed = true
    end
 
-   -- Positional Arguments
-   for i_arg = 2, #arg do
-      local x_arg = arg[i_arg]
-      local stripped_arg = ""
+   -- Flag and Variable Arguments
+   local i_arg = 2
+   while i_arg <= #arg do
+      local unformatted_xarg = arg[i_arg]
+      local x_arg_value = arg[i_arg+1]
+      local x_arg = ""
 
       -- strip leading 2 hyphens then normalize to lua friendly keynames (_)
-      if #x_arg > 2 then
-         stripped_arg = string.sub(x_arg, 3)
+      if #unformatted_xarg > 2 then
+         x_arg = string.sub(unformatted_xarg, 3)
       end
-      stripped_arg = string.gsub(stripped_arg, "-", "_") -- use more
-      if stripped_arg == "help" or x_arg == "-h" or x_arg == "help" then
+      x_arg = x_arg:gsub("-", "_") -- use more
+
+      if x_arg == "help" or unformatted_xarg == "-h" or unformatted_xarg == "help" then
          arg_help_passed = true
-      elseif arg_positionals[x_arg] ~= nil then
-         arg_parsed_positional[x_arg] = true
+         arg_parsed[x_arg] = true
+      elseif arg_flags[x_arg] ~= nil then
+         arg_parsed[x_arg] = true
+      elseif arg_variables[x_arg] ~= nil then
+         if arg_variables[x_arg][x_arg_value] then
+            vallog(x_arg_value, "using valid value for argument", unformatted_xarg)
+         else
+            vallog(x_arg_value, "using undocumented value for argument",
+                   pquote(tostring(unformatted_xarg)))
+
+         end
+         arg_parsed[x_arg] = x_arg_value
+         i_arg = i_arg+1
+         -- error("donut compile")
+      else
+         print(pquote(unformatted_xarg).." is not a recognised argument")
+         parsing_failiure = true
       end
-      arg_parsed_positional[i_arg-1] = x_arg
+      i_arg = i_arg+1
    end
 
+   if parsing_failiure then
+      print("Command was not executed.")
+      print("Type --help to get a list of valid arguments")
+   end
+   print("")                  -- Just command line padding
+   return parsing_failiure
 end
 
 local function regenerate_variables()
    -- Table aliases
    local averb = arg_verbs
-   local apos = arg_positionals
-   local aval = arg_positional_values
+   local apos = arg_flags
+   local aval = arg_variables
    local dir = dirs
    local ldir = local_dirs
    local hstr = help_string
@@ -375,26 +539,24 @@ local function regenerate_variables()
    cvar.FERING_USE_CLANG = cvar.FERING_USE_CLANG
    cvar.FERING_TEST_VAR = cvar.FERING_TEST_VAR
 
-   help_target_alignment_column = 20
+   help_elastic_padding = 20
+   help_option_padding = 5
+   help_option_elastic_padding = 20
 
 end
 -- Program Start
 local function main()
-   parse_arguments()
-   regenerate_variables()
+   local parsing_failure = parse_arguments()
+   local regeneration_failiure = regenerate_variables()
+   if parsing_failure or regeneration_failiure then return end
+
    -- Determine and run action to run
    if arg_verb_passed == false then
-      print("No command supplied, type 'run.lua --help' for commands")
+      print("No command or verb supplied, type 'run.lua --help' for commands")
       return 1
    end
    if arg_parsed_verb == "build" then
-      if arg_parsed_positional.clean then
-         local build_type = arg_parsed_positional[1]
-         build(build_type, true)
-      else
-         local build_type = arg_parsed_positional[1]
-         build(build_type)
-      end
+      build()
    elseif arg_parsed_verb == "run" then
       run()
    elseif arg_parsed_verb == "configure" then
@@ -404,7 +566,7 @@ local function main()
    elseif arg_help_passed then
       help()
    else
-      print("Unrecognized verb argument "..quote(arg_parsed_verb)..
+      print("Unrecognized verb argument "..pquote(arg_parsed_verb)..
             ", type --help for commands")
    end
 
