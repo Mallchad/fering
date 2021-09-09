@@ -313,7 +313,7 @@ local function build()
    TODO("Create passthrough mechanism for cmake variables")
    local build_type = arg_parsed.build_type or "development"
    local clean_build = arg_parsed.clean or false
-   vallog(build_type, "build type")
+   vallog(build_type, "Build Type")
    local cmake_variables_string = ""
    cmake_variables.FERING_BUILD_TYPE = build_type
 
