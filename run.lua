@@ -72,7 +72,7 @@ local arg_help_passed = false
 
 local dirs =
    {
-      root = ""
+      root = "."
    }
 --- All used local-only project directories, relative to project root
 -- This is supposed to be temporary directories/files that are ok to delete
