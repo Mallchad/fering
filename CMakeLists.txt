@@ -20,26 +20,32 @@ target_compile_definitions(fering PUBLIC FERING_DEBUG=${FERING_DEBUG})
 # Dependencies
 add_library(cxxopts STATIC include)
 
+function(set_default variable value)
+  if(NOT DEFINED variable)
+    set(variable value)
+  endif()
+endfunction()
+
 # Variables
-set(FERING_MINIMUM_CXX_STANDARD ${CMAKE_CXX_STANDARD}
+set_default(FERING_MINIMUM_CXX_STANDARD ${CMAKE_CXX_STANDARD}
   CACHE STRING "The minimum C++ Standard to use")
-set(FERING_BUILD_TYPE ${CMAKE_BUILD_TYPE}
+set_default(FERING_BUILD_TYPE ${CMAKE_BUILD_TYPE}
   CACHE STRING "The type of build the project wants to make")
-set(FERING_BUILD_DIR ${CMAKE_BINARY_DIR}
+set_default(FERING_BUILD_DIR ${CMAKE_BINARY_DIR}
   CACHE STRING "A custom path for the build directory")
-set(FERING_BINARY_DIR ${FERING_BUILD_DIR}/bin
+set_default(FERING_BINARY_DIR ${FERING_BUILD_DIR}/bin
   CACHE STRING "A custom path for the binary output directory")
-set(FERING_LIBRARY_DIR ${FERING_BUILD_DIR}/bin
+set_default(FERING_LIBRARY_DIR ${FERING_BUILD_DIR}/lib
   CACHE STRING "A custom path for the library output directory")
-set(FERING_ARTIFACT_DIR ${FERING_BUILD_DIR}/bin
+set_default(FERING_ARTIFACT_DIR ${FERING_BUILD_DIR}/artifacts
   CACHE STRING "A custom path for the build artifact output directory")
-set(FERING_DEBUG_DIR ${FERING_BUILD_DIR}/debug
+set_default(FERING_DEBUG_DIR ${FERING_BUILD_DIR}/debug
   CACHE STRING "A custom path for the build artifact output directory")
-set(FERING_ENABLE_DEBUG true
+set_default(FERING_ENABLE_DEBUG true
   CACHE STRING "Enables debugging specific options")
-set(FERING_USE_CCACHE true
+set_default(FERING_USE_CCACHE true
   CACHE STRING "Whether to prioritize ccache usage if possible")
-set(FERING_USE_CLANG true
+set_default(FERING_USE_CLANG true
   CACHE STRING "Whether to prioitize clang usage if possible")
 # Standard Variables
 
