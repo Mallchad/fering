@@ -8,36 +8,43 @@
    The source comes with no warranty of any kind.
 ]]--
 -- Variables
-
+-- This section near the top is supposed to be easily edited, for quick
+-- extensibility of documentation and passable variables
 local log_verbose = true
-local log_silent = false
+local log_quiet = false
 -- Record log messages to disk, does nothing yet
-local log_record
+local log_record = false
 
 local debug_enabled = false
 -- Temporarily ignores some debug facilities that should error out
 -- 'DEBUG_IGNORE' only needs to be set to be considered true
 local debug_ignore = os.getenv("DEBUG_IGNORE") or nil
 
--- This section is supposed to be easily edited, for quick
--- extensibility of documentation and passable variables
-
+-- Enables dangerous operations like remove folders
+local UNSAFE = false
+-- Similar to the above but explicit, and more targeted for stable features
+local dry_run = false
 --- The keys describe action arguments which can be executed.
 -- Each verb has a help string as its value
 local arg_verbs =
    {
-      build = "regenerate the build system and compile the project",
-      clean = "remove local, non-critical untracked files where possible",
-      configure  = "setup desirable local-only files and build enviornment",
-      run   = "run the an executable from the project",
-      help  = "display help string"
+      build         = "regenerate the build system and compile the project",
+      clean         = "remove local, non-critical untracked files where possible",
+      configure     = "setup desirable local-only files and build enviornment",
+      run           = "run the an executable from the project",
+      help          = "display help string"
    }
 --- Unordered arguments
 -- The key is the argument name, the value is a help string
 local arg_flags =
    {
-      clean = "Run the a clean target before building",
-      verbose = "Enable verbose message output",
+      clean         = "Run a clean target before building",
+      clean_only    = "Run a clean target only, without building",
+      verbose       = "Enable verbose message output",
+      quiet         = "Silence message output",
+      dry_run       = "Don't do anything (WARNING: NOT FULLY FUNCTIONAL YET)",
+      build_first   = "Run a build before running an executable",
+      UNSAFE        = "Disable saftey mechanisms on destructive operations"
    }
 --- Unordered arguments that can store a value
 -- The key is the argument name, the value is a help string
@@ -49,8 +56,7 @@ local arg_variables =
    {
       build_type =
          {
-            [[A string that is a passed to cmake as FERING_BUILD_TYPE,
-as well as '--config' cmake build option variable]],
+            [[A string that is a passed to cmake as FERING_BUILD_TYPE, as well as '--config' cmake build option variable]],
             debug       = "Build Type: Type with debugging symbols",
             development = "Build Type: with no special settings or optimizations",
             testing     = "Build Type: with optimizations but also with development tools",
@@ -76,12 +82,15 @@ local dirs =
    }
 --- All used local-only project directories, relative to project root
 -- This is supposed to be temporary directories/files that are ok to delete
+-- The 'build' subdirectories have to be specified as relative
+-- to the parent 'build' directory, because of the way cmake changes directories.
+-- Otherwise absolute directories can be used
 local local_dirs =
    {
-      build = "build",
-      build_binaries = "build/bin",
-      build_artifacts = "artifacts",
-      build_debug = "build/debug",
+      build             = "build",
+      build_binaries    = "./bin",
+      build_artifacts   = "./artifacts",
+      build_debug       = "./debug",
    }
 local help_string =
    {
@@ -115,17 +124,17 @@ local build_primary_executable_name = "fering"
 local build_primary_executable_path = local_dirs.build_binaries.."/"..build_primary_executable_name
 local cmake_variables =
    {
-      CMAKE_BUILD_TYPE = nil,
-      FERING_MINIMUM_CXX_STANDARD = 17,
-      FERING_BUILD_DIR = local_dirs.build,
-      FERING_BINARY_DIR = local_dirs.build_binaries,
-      FERING_LIBRARY_DIR = local_dirs.build_libraries,
-      FERING_ARTIFACT_DIR = local_dirs.build_artifacts,
-      FERING_DEBUG_DIR = local_dirs.build_debug,
-      FERING_ENABLE_DEBUG = true,
-      FERING_USE_CCACHE = true,
-      FERING_USE_CLANG = true,
-      FERING_TEST_VAR = "Hello, I'm an irrational value!"
+      CMAKE_BUILD_TYPE              = nil,
+      FERING_MINIMUM_CXX_STANDARD   = 17,
+      FERING_BUILD_DIR              = local_dirs.build,
+      FERING_BINARY_DIR             = local_dirs.build_binaries,
+      FERING_LIBRARY_DIR            = local_dirs.build_libraries,
+      FERING_ARTIFACT_DIR           = local_dirs.build_artifacts,
+      FERING_DEBUG_DIR              = local_dirs.build_debug,
+      FERING_ENABLE_DEBUG           = true,
+      FERING_USE_CCACHE             = true,
+      FERING_USE_CLANG              = true,
+      FERING_TEST_VAR               = "Hello, I'm an irrational value!"
    }
 
 local help_elastic_padding = 20
@@ -133,6 +142,16 @@ local help_option_padding = 5
 local help_option_elastic_padding = 20
 -- Helper functions
 
+--- Join multiple strings in one command
+-- Primarily meant for merging multiple varaiadic string arguments
+function string.concat(str, ...)
+   local concat_targets = {...}
+   local tmp = str
+   for _, x_str in pairs(concat_targets) do
+      tmp = tmp..x_str
+   end
+   return tmp
+end
 --- Wrap a string in speech marks
 -- This is primarily a helper for Windows path compatibility
 local function quote(str)
@@ -143,14 +162,10 @@ end
 local function pquote(str)
    return ("'"..str.."'")
 end
---- Write a message to stdout, adhering to 'log_silent'
+--- Write a message to stdout, adhering to 'log_quiet'
 local function log(...)
-   local messages = {...}
-   local message_string = ""
-   for _, x_message in pairs(messages) do
-      message_string = message_string..tostring(x_message)
-   end
-   if log_silent == false then
+   local message_string = string.concat(...)
+   if log_quiet == false then
       print(message_string)
    end
 end
@@ -165,7 +180,7 @@ local function vallog(value, ...)
    for _, x_message in pairs(messages) do
       message_string = message_string..tostring(x_message).." "
    end
-   if log_silent == false then
+   if log_quiet == false then
       print(value_string.." : "..message_string)
    end
 end
@@ -176,27 +191,71 @@ end
 -- trivial like time to type, or a long name cluttering code should not
 -- be a factor in deciding not to them, it should be used often.
 local function dlog(...)
-   if log_verbose then
-      print(...)
+   if log_verbose and log_quiet == false then
+      print("dlog:", ...)
    end
-   error("finish this.")
 end
---- Logging facilities that will error if 'debug_ignore' is false
+local function dvallog(value, ...)
+   local messages = {...}
+   local message_string = ""
+   local value_string = tostring(value)
+
+   if type(value) == "string" then
+      value_string = pquote(value)
+   end
+   for _, x_message in pairs(messages) do
+      message_string = message_string..tostring(x_message).." "
+   end
+
+   if log_verbose and log_quiet == false then
+      if #value_string >= 80 then
+         print("[ dlog ]", message_string.." : "..value_string)
+      else
+         print("[ dlog ]", value_string.." : "..message_string)
+      end
+   end
+end
+--- Temporary Logging facilities that will error if 'debug_ignore' is false
 -- This value is considered true if enviornment variable 'DEBUG_IGNORE'
 -- has been set
 local function TLOG(...)
    assert(debug_ignore, "Debugging is disabled, you should delete this temporary line")
-   print(...)
+   print("TLOG:",...)
 end
 --- An reminder function that will error is 'debug_ignore' is false
 -- This is just a helper function for writing code
+local function TODO(...)
    local messages = {...}
    local message_string = ""
-   local value_string = pquote(tostring(value))
+
    for _, x_message in pairs(messages) do
       message_string = message_string..tostring(x_message).." "
    end
    assert(debug_ignore, "TODO: "..message_string)
+end
+--- Specifies an unsafe operation is about to occur
+-- This is mostly just for displaying/logging
+local function unsafe_begin(operation_description)
+   assert(operation_description, "description argument not supplied")
+   if UNSAFE == false then
+      log("Operation marked as UNSAFE. Description: \n"
+          ..operation_description.."\n")
+      log("--UNSAFE not set, proceed with caution when using")
+   elseif dry_run then
+      log("UNSAFE: --dry-run specified, inhibiting dangerous actions.")
+   end
+end
+--- Run a console command and log command if verbose
+-- Will not run any commands if 'dry_run' is true
+local function safe_execute(command)
+   assert(type(command) == "string", "'command' must be type string")
+   if dry_run ~= true then
+      dvallog(command, "executing command")
+      return os.execute(command)
+   else
+      dvallog(command, "command would have been executed")
+      return nil
+   end
 end
 --- Check if a file or directory exists in this path
 local function file_exists(file)
@@ -222,14 +281,14 @@ local function make_directories(...)
       new_directories = new_directories[1]
    end
 
-   local verbose_output = log_verbose and not log_silent
+   local verbose_output = log_verbose and not log_quiet
    verbose_output = true
    for _, new_dir in pairs(new_directories) do
       if dir_exists(new_dir)then
          print(new_dir.." : directory already exists")
       else
          -- Quote path for Windows compatibility
-         os.execute("cmake -E make_directory "..quote(new_dir))
+         safe_execute("cmake -E make_directory "..quote(new_dir))
          if verbose_output then
             print(new_dir.." : created directory")
          end
@@ -241,26 +300,44 @@ end
 local function remove_directories(...)
    -- the "-E" switch provides cross-platform tools provided by CMake
    local doomed_directories = {...}
-   local directories_string = ""
    local remove_failiure = 1
    local _
    local quoted_dir = quote("")
+   local all_sucess = true
+   local command = ""
+
+   assert(#doomed_directories, "No argument provided")
+   unsafe_begin("Removing directories and deleting their contents")
+   if type(doomed_directories[1]) == "table" then
+      doomed_directories = doomed_directories[1]
+   end
 
    for _, x_directory in pairs(doomed_directories) do
       quoted_dir = quote(x_directory)
-      if dir_exists(x_directory) then
-         _, _, remove_failiure = os.execute("cmake -E rm -r "..quote(quoted_dir))
-         print(quoted_dir)
-      end
-      if remove_failiure == 1 then
-         print(quoted_dir.." : Failed remove directory")
+      command = "cmake -E rm -r "..quoted_dir
+      dvallog(command, "Command will be executed")
+
+      if UNSAFE == false or dry_run then
+         vallog(x_directory, " Directory would be removed")
       else
-         print(quoted_dir.." : Removed directory")
+         if dir_exists(x_directory) then
+            _, _, remove_failiure = safe_execute("cmake -E rm -r "..quote(quoted_dir))
+            print(quoted_dir)
+         end
+         if remove_failiure == 1 then
+            print(quoted_dir.." : Failed remove directory")
+            all_sucess = false
+         else
+            print(quoted_dir.." : Removed directory")
+         end
       end
    end
+   return all_sucess
 end
 local function copy_file(source, destination)
-   os.execute("cmake -E copy "..quote(source).." "..quote(destination))
+   local command = ("cmake -E copy "..quote(source).." "..quote(destination))
+   dvallog(command, "Command will be executed")
+   safe_execute(command)
    print(source, destination)
 end
 --- Find the last occurance of substring and return the 2 indicies of the position
@@ -287,6 +364,8 @@ function table:copy(old, target)
    end
    return setmetatable(new, getmetatable(old))
 end
+
+-- End of Helper functions
 -- Operational Functions
 
 -- Do any post-build setup required
@@ -296,23 +375,17 @@ local function configure()
    make_directories(local_dirs)
 
    -- Generate helpful or neccecary local files
-   os.execute("cmake -S "..local_dirs.root.." -B "..local_dirs.build.. " -DCMAKE_EXPORT_COMPILE_COMMANDS=1")
+   safe_execute("cmake -S "..local_dirs.root.." -B "..local_dirs.build.. " -DCMAKE_EXPORT_COMPILE_COMMANDS=1")
    copy_file(local_dirs.build.."/compilation_commands.json", local_dirs.root.."/compile_commands.json")
    print("")                  -- Just command line padding
 end
-local function clean(clean_method)
+local function clean()
    print("[Clean Start]")
-   for _, x_directory in pairs(local_dirs) do
-      remove_directories(x_directory)
-   end
-   print("[Clean Done]")
-   print("")                  -- Just command line padding
-
+   remove_directories(local_dirs)
+   print("[Clean Done] \n")
 end
 local function build()
-   TODO("Create passthrough mechanism for cmake variables")
    local build_type = arg_parsed.build_type or "development"
-   local clean_build = arg_parsed.clean or false
    vallog(build_type, "Build Type")
    local cmake_variables_string = ""
    cmake_variables.FERING_BUILD_TYPE = build_type
@@ -331,27 +404,33 @@ local function build()
    local build_binary_string = build_binary_command.." --config="..build_type
 
    print("[Pre-Build]")
-   if clean_build or arg_parsed[1] == "clean" then
+   if arg_parsed.clean or arg_parsed.clean_only then
       print("Cleaning build area")
-      os.execute(build_clean_command)
+      safe_execute(build_clean_command)
    end
-   print("[Build Start]")
-   os.execute(build_setup_string)
-   os.execute(build_binary_command)
-   print("[Finishing Up]")
-   print("[Done]")
-   print("")                  -- Just command line padding
-
+   if arg_parsed.clean_only ~= true then
+      print("[Build Start]")
+      safe_execute(build_setup_string)
+      safe_execute(build_binary_string)
+      print("[Finishing Up]")
+      print("[Done]")
+      print("")                  -- Just command line padding
+   end
 end
-local function run(build_first)
-   build_first = build_first or false
+--- Run the built binary
+-- Optionally can build running
+local function run()
+   local build_first = arg_parsed.build_first or false
    local executable_string = build_primary_executable_path
 
    -- Append any extra arguments
    for _, x_arg in ipairs(arg_parsed) do
       executable_string = executable_string.." "..x_arg
    end
-   os.execute(executable_string)
+   if build_first then
+      build()
+   end
+   safe_execute(executable_string)
    print("")                  -- Just command line padding
 end
 -- Display the help text
@@ -449,7 +528,6 @@ local function parse_arguments()
    elseif path_end == nil then
       arg_relative_root = ""
    end
-   local_dirs.build = arg_relative_root..local_dirs.build
 
    -- Verb Arguments
    if arg_parsed_verb ~= nil then
@@ -498,13 +576,17 @@ local function parse_arguments()
    end
 
    if parsing_failiure then
-      print("Command was not executed.")
-      print("Type --help to get a list of valid arguments")
+      print([[
+
+Command was not executed.
+Type --help to get a list of valid arguments]])
    end
    print("")                  -- Just command line padding
    return parsing_failiure
 end
-
+--- Regenerate all values based on passed arguments and changed variables
+-- This should only be run once, running it more that once will result in
+-- duplicate substrings in strings
 local function regenerate_variables()
    -- Table aliases
    local averb = arg_verbs
@@ -519,20 +601,24 @@ local function regenerate_variables()
    -- Additionally, this function not for setting default values, that's just confusing
    -- It should also be assumed that the user might have manually set a variable
    -- through this build tool
+   log_verbose = arg_parsed.verbose or false
+   log_quiet = arg_parsed.quiet or false
+
+   UNSAFE = arg_parsed.UNSAFE or false
+   dry_run = arg_parsed.dry_run
+
    dir.root = arg_relative_root
    ldir.build = dir.root.."/build"
-   ldir.build_binaries = ldir.build.."/bin"
-   ldir.build_artifacts = ldir.build.."/artifacts"
-   ldir.build_libraries = ldir.build.."/lib"
-   ldir.build_debug = ldir.build.."/debug"
-
+   ldir.build_binaries = "./bin"
+   ldir.build_artifacts = "./artifacts"
+   ldir.build_libraries = "./lib"
+   ldir.build_debug = ".//debug"
    build_configure_command =
       "cmake -S "..quote(dir.root).." -B "..quote(ldir.build)
    build_binary_command = "cmake --build "..quote(ldir.build)
    build_clean_command = "cmake --build "..quote(ldir.build).. " --target clean"
    build_primary_executable_name = "fering"
    build_primary_executable_path = ldir.build_binaries.."/"..build_primary_executable_name
-
    cvar.FERING_BUILD_TYPE = cvar.FERING_BUILD_TYPE
    cvar.FERING_BUILD_DIR = ldir.build
    cvar.FERING_BINARY_DIR = ldir.build_binaries
@@ -557,11 +643,12 @@ local function main()
    if parsing_failure or regeneration_failiure then return end
 
    -- Determine and run action to run
-   if arg_verb_passed == false then
+   if arg_help_passed then
+      help()
+   elseif arg_verb_passed == false then
       print("No command or verb supplied, type 'run.lua --help' for commands")
       return 1
-   end
-   if arg_parsed_verb == "build" then
+   elseif arg_parsed_verb == "build" then
       build()
    elseif arg_parsed_verb == "run" then
       run()
@@ -569,8 +656,6 @@ local function main()
       configure()
    elseif arg_parsed_verb == "clean" then
       clean()
-   elseif arg_help_passed then
-      help()
    else
       print("Unrecognized verb argument "..pquote(arg_parsed_verb)..
             ", type --help for commands")
