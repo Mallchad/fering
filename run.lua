@@ -152,6 +152,25 @@ function string.concat(str, ...)
    end
    return tmp
 end
+
+--- Join multiple path strings in one command
+-- Primarily meant for cleaning up syntax for path construction
+function string.construct_path(str, ...)
+   local concat_targets = {...}
+   local tmp = str
+   for _, x_str in pairs(concat_targets) do
+      print(x_str)
+
+      local first_char = x_str:sub(1, 1)
+      assert(first_char ~= "/", "Attempted to construct a path with a leading slash, implies root, this is likely a mistake")
+      if first_char == "/" then
+         tmp = tmp..x_str
+      else
+         tmp = tmp.."/"..x_str
+      end
+   end
+   return tmp
+end
 --- Wrap a string in speech marks
 -- This is primarily a helper for Windows path compatibility
 local function quote(str)
@@ -609,16 +628,19 @@ local function regenerate_variables()
 
    dir.root = arg_relative_root
    ldir.build = dir.root.."/build"
-   ldir.build_binaries = "./bin"
-   ldir.build_artifacts = "./artifacts"
-   ldir.build_libraries = "./lib"
-   ldir.build_debug = "./debug"
+   -- Build dirs have to be relative to root or absolute, for CMake
+   ldir.build_binaries = "bin"
+   ldir.build_artifacts = "artifacts"
+   ldir.build_libraries = "lib"
+   ldir.build_debug = "debug"
    build_configure_command =
       "cmake -S "..quote(dir.root).." -B "..quote(ldir.build)
    build_binary_command = "cmake --build "..quote(ldir.build)
    build_clean_command = "cmake --build "..quote(ldir.build).. " --target clean"
    build_primary_executable_name = "fering"
-   build_primary_executable_path = ldir.build_binaries.."/"..build_primary_executable_name
+   build_primary_executable_path = string.construct_path(ldir.build,
+                                                         ldir.build_binaries,
+                                                         build_primary_executable_name)
    cvar.FERING_BUILD_TYPE = cvar.FERING_BUILD_TYPE
    cvar.FERING_BUILD_DIR = ldir.build
    cvar.FERING_BINARY_DIR = ldir.build_binaries
