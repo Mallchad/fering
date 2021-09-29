@@ -612,7 +612,7 @@ local function regenerate_variables()
    ldir.build_binaries = "./bin"
    ldir.build_artifacts = "./artifacts"
    ldir.build_libraries = "./lib"
-   ldir.build_debug = ".//debug"
+   ldir.build_debug = "./debug"
    build_configure_command =
       "cmake -S "..quote(dir.root).." -B "..quote(ldir.build)
    build_binary_command = "cmake --build "..quote(ldir.build)
