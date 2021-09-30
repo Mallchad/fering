@@ -1,13 +1,37 @@
 # Ignore Everything in Root
-*/
+*
 
-# Whitelist
-!include/
-!src/
-!tests/
+# --Whitelist--
+# Root Files (add sparingly)
 !.gitignore
 !*.lua
 !*.md
 !CMakeLists.txt
+!README
+!HACKING
+!TEMPLATES
 
-# Blacklist
+# --Subdirectories--
+!doc/
+!include/
+!src/
+!tests/
+!tools/
+
+
+# --Blacklist--
+# Project Intermediates
+build/
+*.so
+*.pdb
+*.exe
+
+# Unix Backup Files
+~*
+
+# Editor Files
+# Emacs:
+.dirs-locals
+# Autosave Files
+*#
+.projectile
