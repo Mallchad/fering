@@ -1,0 +1,9 @@
+# Hacking
+Notes and guidelines for working with the source code.
+
+## gitignore
+This project uses a whitelist style gitignore.
+
+It is a style of gitignroe that  is fairly high effort on the programmer's part,
+but it is less prone to naive  `git add -A` operations, although of course doing
+nothing to help forced adds.

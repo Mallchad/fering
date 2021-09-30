@@ -1,0 +1,62 @@
+# Fering
+## Forenotes
+Requirements:
+- C++17 compliant compiler on the path - tested primarily with clang
+- CMake 3.10 or high
+- Build System like make, ninja, msbuild - Aiming for compatibility with those 3
+- [cxxopts](https://github.com/jarro2783/cxxopts) - (neat header only command line engine  jarro2783. 
+- Lua Interpreter - Optional for using the build tools
+
+## About
+Fering is a general-purpose project which  aims to aid users with managing their
+system, system  maintenance can  be hard to  achieve well on  its own,  doing it
+without  tools is  even worse.   This  project aims  to help  alleviate this  by
+providing simple  yet effective tools  to track  files, directories, and  in the
+future operate on such tracked items.
+
+Currently the only support feature is recording items worth of note in a `record` file, 
+by default this is located at `$HOME/.local/share/blink/record`
+
+Yes it's a glorified list builder for the commander line. 
+For now.
+
+## Building
+There are 2 primary ways of building the project.
+
+- Using the `run.lua` build tool.
+- Using cmake directly.
+
+Using the Build Tool  
+`./run.lua build`  
+
+Traditional method using CMake directly  
+Create a build directory like `build` and change the working directory to the build dir.
+Then run cmake whilst specifying the project root directory.  
+
+example  
+`cd /data/repos/blink`  
+`mkdir build && cd build`  
+`cmake ..`  
+
+Traditional method using CMake semantics  
+`cmake -S . -B build` - initialize the cache  
+`cmake --build build`   - build the source  
+
+The binary should now be found in `./bin` from the build directory named `blink`.
+
+## Usage
+Getting help string for the command  
+`blink -h`  
+
+Adding a new record to the database  
+`blink -r ~/documents/a_new_document`  
+Shell Expansion Globbing Support  
+`blink -r ~/.config/*`  
+
+## Footnotes
+Why is there no  markdown file extensions if the pages  are written in markdown?
+Oh,  well, markdown  standards are  kind of  inconsistent (meaning  there is  no
+standard), making  markdown kind of hard  to write for, it's  pretty universally
+known and  accepted.  Want  to view  the files in  markdown, just  open it  in a
+renderer, GitHub's renderer  just isn't very useful, it breaks  formatting or is
+nearly unreadable, so the extension is omitted to prevent GitHub rendering...
